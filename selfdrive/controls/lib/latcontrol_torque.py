@@ -24,7 +24,7 @@ from openpilot.selfdrive.controls.lib.vehicle_model import ACCELERATION_DUE_TO_G
 LOW_SPEED_X = [0, 10, 20, 30]
 LOW_SPEED_Y = [15, 13, 10, 5]
 
-MAX_LAT_JERK_UP = 2.5            # m/s^3
+MAX_LAT_JERK_UP = 1.8            # m/s^3 (reduced from 2.5 for smoother lane changes)
 
 class LatControlTorque(LatControl):
   def __init__(self, CP, CI, dt):
