@@ -16,8 +16,12 @@ class FrogPilotVCruise:
 
     self.forcing_stop = False
     self.override_force_stop = False
+    self.soft_stop_committed = False
 
+    self.force_stop_timer = 0
     self.override_force_stop_timer = 0
+    self.soft_tracked_length = 0
+    self.tracked_model_length = 0
 
   def update(self, gps_position, now, time_validated, v_cruise, v_ego, sm, frogpilot_toggles):
     force_stop = self.frogpilot_planner.cem.stop_light_detected and sm["controlsState"].enabled and frogpilot_toggles.force_stops
@@ -92,5 +96,26 @@ class FrogPilotVCruise:
         targets.append(max(self.slc.overridden_speed, self.slc_target + self.slc_offset) - v_ego_diff)
 
       v_cruise = min([target if target >= CRUISING_SPEED else v_cruise for target in targets])
+
+      # Soft stop: once a stop sign/light is detected, pace v_cruise down to ~1 mph so the
+      # vehicle keeps decelerating even after close-range detection drops out
+      if not frogpilot_toggles.force_stops:
+        if self.soft_stop_committed:
+          if sm["carState"].gasPressed or sm["frogpilotCarState"].accelPressed:
+            self.soft_stop_committed = False
+            self.soft_tracked_length = self.frogpilot_planner.model_length
+          else:
+            self.soft_tracked_length = max(self.soft_tracked_length - (v_ego * DT_MDL), 0)
+            v_cruise = min(max(self.soft_tracked_length / PLANNER_TIME, CRUISING_SPEED / 10), v_cruise)
+
+            past_stop = (not self.frogpilot_planner.cem.stop_light_detected and
+                         self.frogpilot_planner.model_length > CRUISING_SPEED * PLANNER_TIME * 2)
+            if sm["carState"].standstill or past_stop:
+              self.soft_stop_committed = False
+              self.soft_tracked_length = self.frogpilot_planner.model_length
+        else:
+          self.soft_tracked_length = self.frogpilot_planner.model_length
+          if self.frogpilot_planner.cem.stop_light_detected:
+            self.soft_stop_committed = True
 
     return v_cruise
